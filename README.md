@@ -9,11 +9,11 @@ This repository provides ...
 * A set of Mathematica tools for simple analysis and plotting (`mathlib/`, also available in [paclet form](https://scripts.mit.edu/~gurtej/mma_paclets/qcdlib.paclet)).
 * A set of Python tools for simple analysis and plotting (`pylib/`).
 * Several libraries with useful functions for MCMC sampling and observable measurements in particular theories (`gauge_theory/`, `scalar_field/`, ...).
-* A set of executable Python scripts that expose simulation and measurement functions for various theories (`pybin/`).
+* A set of executable Python scripts that expose simulation and measurement functions for various theories (`pybin/`). These scripts generally assume the root repository directory is on the Python path.
 
 Non-scope of the project
 ------------------------
-Code in this repository is intended to serve as a basis for simple prototyping and explorations in low-dimensional theories. Implementations are generally *not optimized, parallelized, or distributed*.
+Code in this repository is intended to serve as a basis for simple prototyping and explorations in low-dimensional theories, thus implementations are generally *not optimized, parallelized, or distributed*.
 
 This code is also provided as-is, without guarantees of any kind. Use at your own risk.
 
