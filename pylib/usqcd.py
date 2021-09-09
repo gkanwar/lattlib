@@ -66,7 +66,7 @@ def extract_lime_propagator(filename, latt_shape, *, Nc=3, Ns=4, prec='double'):
     Nd = len(latt_shape)
     # TODO: replace explicit shape with inspecting format_xml
     format_xml, data = extract_lime_records(filename, [(2,1), (2,3)])
-    prop_shape = tuple(reversed(latt_shape)) + (Nc, Ns, Nc, Ns)
+    prop_shape = tuple(reversed(latt_shape)) + (Ns, Ns, Nc, Nc)
     assert prec in ['double', 'single']
     in_dtype = '>c16' if prec == 'double' else '>c8'
     out_dtype = np.complex128 if prec == 'double' else np.complex64
