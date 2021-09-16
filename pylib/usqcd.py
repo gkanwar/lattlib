@@ -79,10 +79,10 @@ def extract_lime_cfg(filename, latt_shape, *, Nc=3, prec='double'):
     Nd = len(latt_shape)
     # TODO: replace explicit shape with inspecting format_xml
     format_xml, data = extract_lime_records(filename, [(2,3), (2,4)])
-    cfg_shape = (Nd,) + tuple(reversed(latt_shape)) + (Nc,Nc)
+    cfg_shape = tuple(reversed(latt_shape)) + (Nd,) + (Nc,Nc)
     assert prec in ['double', 'single']
     in_dtype = '>c16' if prec == 'double' else '>c8'
     out_dtype = np.complex128 if prec == 'double' else np.complex64
     arr = np.frombuffer(data, dtype=in_dtype).reshape(cfg_shape).astype(out_dtype)
-    inds = [0] + list(reversed(range(1,Nd+1))) + [Nd+1, Nd+2]
+    inds = list(reversed(range(0,Nd+1))) + [Nd+1, Nd+2]
     return np.transpose(arr, inds)
