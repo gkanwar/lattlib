@@ -1,4 +1,3 @@
-
 import numpy as np
 
 # Plot error traces
@@ -82,6 +81,19 @@ def covar_from_boots(boots):
     means = np.mean(boots, axis=0, keepdims=True)
     deltas = boots - means
     return np.tensordot(deltas, deltas, axes=(0,0)) / (Nboot-1)
+
+def bin_data(x, *, binsize, silent_trunc=True):
+    x = np.array(x)
+    if silent_trunc:
+        x = x[:(x.shape[0] - x.shape[0]%binsize)]
+    else:
+        assert x.shape[0] % binsize == 0
+    ts = np.arange(0, x.shape[0], binsize) # left endpoints of bins
+    if len(x.shape) >= 2:
+        x = np.reshape(x, (-1, binsize) + x.shape[2:])
+    else:
+        x = np.reshape(x, (-1, binsize))
+    return ts, np.mean(x, axis=1)
 
 # Autocorrelations
 def compute_autocorr(Os, *, tmax, vacsub=True):
