@@ -405,11 +405,7 @@ def det_sparse(M):
     return out
 
 def bosonic_force(cfg, verbose=False):
-    F = np.zeros(cfg.shape, dtype=np.complex128)
-    # specialized to U(1)
-    F[0] = cfg[0]
-    F[1] = cfg[1]
-    F = -1j * (F - np.conj(F)) / 2
+    F = -1j * (cfg - np.conj(cfg)) / 2
     if verbose: print("bosonic_force {:.8f}".format(np.mean(np.abs(F))))
     return F
 # TEST:
