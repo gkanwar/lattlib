@@ -28,4 +28,5 @@ Many thanks to the following folks who have been willing test subjects, have rep
 * Denis Boyda ([boydad](https://github.com/boydad))
 * Anthony Grebe ([agrebe](https://github.com/agrebe))
 * Daniel C. Hackett ([dchackett](https://github.com/dchackett))
+* Julian M. Urban ([julian-urban](https://github.com/julian-urban))
 * Michael L. Wagman ([mlwagman](https://github.com/mlwagman))
