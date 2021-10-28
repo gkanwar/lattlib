@@ -104,6 +104,7 @@ def _test_indices():
     print("GOOD\n")
 if __name__ == "__main__": _test_indices()
 
+# TODO extend function to configure spatial OBC
 def dirac_op(cfg, kappa, sign=1):
     # print("Making dirac op...")
     start = time.time()
@@ -618,7 +619,7 @@ def _test_grad_logdet():
     A = np.random.normal(size=shape) + 1j * np.random.normal(size=shape)
     M = A @ np.conj(np.transpose(A))
     old_logdetM = np.log(np.linalg.det(M))
-    
+
     d = 0.0000001
     dM = d*(np.random.normal(size=shape) + 1j * np.random.normal(size=shape))
     deriv = grad_logdet(M)
