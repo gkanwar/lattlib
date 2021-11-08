@@ -42,3 +42,6 @@ bin/*
 
 # Paclet files
 *.paclet
+
+# Config files and spectroscopy data
+*.npy
