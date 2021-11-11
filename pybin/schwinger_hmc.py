@@ -59,6 +59,7 @@ def run_hmc(L, n_step, n_skip, n_therm, tau, n_leap, action, cfg, *, topo_hop_fr
     cfgs = []
     plaqs = []
     topos = []
+    rates = []   # acceptance rates
     lmoms = []   # link momenta
     with tqdm.tqdm(total = n_therm + n_step, postfix='Acc: ???, Q: ???') as t:
         for i in tqdm.tqdm(range(-n_therm, n_step)):
@@ -105,6 +106,7 @@ def run_hmc(L, n_step, n_skip, n_therm, tau, n_leap, action, cfg, *, topo_hop_fr
                 cfgs.append(cfg)
                 plaqs.append(plaq)
                 topos.append(topo)
+                rates.append(total_acc / (i+1))
                 lmoms.append(K)
                 t.postfix = 'Acc: {:.3f}, Q: {:d}'.format(total_acc / (i+1), Q)
             t.update()
@@ -113,7 +115,7 @@ def run_hmc(L, n_step, n_skip, n_therm, tau, n_leap, action, cfg, *, topo_hop_fr
     print("Total acc {:.4f}".format(total_acc / n_step))
     if topo_hop_freq > 0:
         print("Total hop acc {:.4f}".format(hop_acc / hop_props))
-    return cfgs, plaqs, topos, lmoms
+    return cfgs, plaqs, topos, rates, lmoms
 
 
 if __name__ == "__main__":
@@ -199,7 +201,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # do the thing!
-    cfgs, plaqs, topos, lmoms = run_hmc(L, tot_steps, args.n_skip, args.n_therm,
+    cfgs, plaqs, topos, rates, lmoms = run_hmc(L, tot_steps, args.n_skip, args.n_therm,
                                  args.tau, args.n_leap, action, cfg,
                                  topo_hop_freq=args.topo_hop_freq)
 
@@ -216,6 +218,9 @@ if __name__ == "__main__":
     fname = prefix + '.topo.npy'
     np.save(fname, topos)
     print("Wrote topos to {}".format(fname))
+    fname = prefix + '.acc_rates.npy'
+    np.save(fname, rates)
+    print("Wrote acceptance rates to {}".format(fname))
     fname = prefix + '.lmom.npy'
     np.save(fname, lmoms)
     print("Wrote link momenta to {}".format(fname))
