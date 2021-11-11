@@ -36,13 +36,15 @@ def hmc_update(cfg, action, tau, n_leap, verbose=True):
     if np.random.random() < np.exp(-delta_H):
         acc = 1
         S = new_S
+        K = new_K
     else:
         cfg = old_cfg
         S = old_S
+        K = old_K
     if verbose:
         print("Acc {:.5g} (changed {})".format(min(1.0, np.exp(-delta_H)), acc))
 
-    return cfg, S, acc
+    return cfg, S, acc, K
 
 def run_hmc(L, n_step, n_skip, n_therm, tau, n_leap, action, cfg, *, topo_hop_freq=0):
     Nd = len(L)
@@ -57,10 +59,11 @@ def run_hmc(L, n_step, n_skip, n_therm, tau, n_leap, action, cfg, *, topo_hop_fr
     cfgs = []
     plaqs = []
     topos = []
+    lmoms = []   # link momenta
     with tqdm.tqdm(total = n_therm + n_step, postfix='Acc: ???, Q: ???') as t:
         for i in tqdm.tqdm(range(-n_therm, n_step)):
             print("MC step {} / {}".format(i+1, n_step))
-            cfg, S, acc = hmc_update(cfg, action, tau, n_leap)
+            cfg, S, acc, K = hmc_update(cfg, action, tau, n_leap)
             if i >= 0: total_acc += acc
             if topo_hop_freq > 0 and i % topo_hop_freq == 0:
                 assert Nd == 2
@@ -102,14 +105,15 @@ def run_hmc(L, n_step, n_skip, n_therm, tau, n_leap, action, cfg, *, topo_hop_fr
                 cfgs.append(cfg)
                 plaqs.append(plaq)
                 topos.append(topo)
+                lmoms.append(K)
                 t.postfix = 'Acc: {:.3f}, Q: {:d}'.format(total_acc / (i+1), Q)
             t.update()
-            
+
     print("MC finished.")
     print("Total acc {:.4f}".format(total_acc / n_step))
     if topo_hop_freq > 0:
         print("Total hop acc {:.4f}".format(hop_acc / hop_props))
-    return cfgs, plaqs, topos
+    return cfgs, plaqs, topos, lmoms
 
 
 if __name__ == "__main__":
@@ -195,7 +199,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # do the thing!
-    cfgs, plaqs, topos = run_hmc(L, tot_steps, args.n_skip, args.n_therm,
+    cfgs, plaqs, topos, lmoms = run_hmc(L, tot_steps, args.n_skip, args.n_therm,
                                  args.tau, args.n_leap, action, cfg,
                                  topo_hop_freq=args.topo_hop_freq)
 
@@ -212,6 +216,9 @@ if __name__ == "__main__":
     fname = prefix + '.topo.npy'
     np.save(fname, topos)
     print("Wrote topos to {}".format(fname))
+    fname = prefix + '.lmom.npy'
+    np.save(fname, lmoms)
+    print("Wrote link momenta to {}".format(fname))
 
     # Compute meson correlation functions
     if args.compute_dirac == "":
