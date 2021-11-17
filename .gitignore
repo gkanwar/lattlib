@@ -45,3 +45,6 @@ bin/*
 
 # Config files and spectroscopy data
 *.npy
+
+# any scripts for testing
+tesing/*
