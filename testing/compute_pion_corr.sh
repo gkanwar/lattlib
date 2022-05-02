@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
 source env.sh
-source ${TESTDIR}/cfg.sh   # defines beta, kappa, action, etc.
+source ${TESTDIR}/rhmc_cfg.sh # defines beta, kappa, action, etc.
 
-# add --gauge_obc_x \ to enable spatial obc
-# add --seed=${SEED} \ if fixing seed
-${PYTHON} ${HMCDIR}/schwinger_hmc.py \
+# add --gauge_obc_x to enable spatial obc
+# add seed=${SEED} if fixing seed
+${PYTHON} ${HMCDIR}/schwinger_propagator.py \
     --Lx=${LX} \
     --Lt=${LT} \
     --tag=${TAG} \
@@ -15,7 +15,7 @@ ${PYTHON} ${HMCDIR}/schwinger_hmc.py \
     --tau=${TAU} \
     --n_leap=${NLEAP} \
     --type=${TYPE} \
-    --gauge_obc_x \
+    --conn_weight=${CONN_WEIGHT} \
+    --disc_weight=${DISC_WEIGHT} \
     --beta=${BETA} \
     --kappa=${KAPPA} \
-    --compute_dirac=${COMPUTE_DIRAC}

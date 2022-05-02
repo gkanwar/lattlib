@@ -3,9 +3,15 @@ import numpy as np
 from matplotlib.ticker import PercentFormatter
 from schwinger.schwinger import PureGaugeAction
 
+# This test qualitatively indicates whether there is anything seriously wrong with the sampled gauge field ensembles. For the sampled configurations ${U_i}$, compute:  exp(-S(U_i)) and Z = \sum \exp(-S(U_i))$  for S = S gauge. Plot the histograms of the negative of the log of the normalized distribution. The resulting histogram should look roughly normal; the exact location of the mean and the width is not important.
+
 # NEEDs ens, beta, action function, nbins
 
-ens = np.load("u1_exwils_Nf2_b2.00_k1.000_N1000_skip10_therm20_16_16_testing.npy")
+
+action_tag = "u1_of_b2.00_k0.233_N100_skip10_therm40_16_48_gaugeBC01_testing"
+
+ens = np.load(f'./ens/_testing/of_b2.00_k0.233/gaugeBC01/{action_tag}.npy')
+
 beta = 2.0
 nbins = 10
 
@@ -22,12 +28,15 @@ for i in range(ncfg):
 pba = np.exp(-np.real(S))
 z = np.sum(pba)
 
-weights = np.ones(ncfg)/ncfg
+ncfgplot=100
+assert(ncfgplot <= ncfg)
+
+weights = np.ones(ncfgplot)/ncfgplot
 
 plt.figure(figsize = (10, 5))
-plt.title("Action distribution {X}x{T}".format(X=latt[0], T=latt[1]))
+plt.title(f'S for {action_tag}')
 plt.xlabel('$S$')
-plt.hist(-np.log(pba),
+plt.hist(np.real(S),
         weights=weights,
         density = True,
         bins = nbins,

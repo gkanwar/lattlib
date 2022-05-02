@@ -1,4 +1,5 @@
 import argparse
+import os
 import math
 import numpy as np
 import scipy as sp
@@ -46,11 +47,11 @@ def hmc_update(cfg, action, tau, n_leap, verbose=True):
 
     return cfg, S, acc, K
 
-def run_hmc(L, n_step, n_skip, n_therm, tau, n_leap, action, cfg, *, topo_hop_freq=0):
+def run_hmc(L, n_step, n_skip, n_therm, tau, n_leap, action, cfg, *, topo_hop_freq=0, gauge_bc=(1, 1)):
     Nd = len(L)
     V = np.prod(L)
     shape = tuple([Nd] + list(L))
-    pure_gauge_action = PureGaugeAction(beta=action.beta)
+    pure_gauge_action = PureGaugeAction(beta=action.beta, gauge_bc=gauge_bc)
 
     # MC updates
     total_acc = 0
@@ -93,10 +94,10 @@ def run_hmc(L, n_step, n_skip, n_therm, tau, n_leap, action, cfg, *, topo_hop_fr
                     print('rejected')
 
             # avg plaq
-            plaq = np.sum(np.real(ensemble_plaqs(cfg))) / V
+            plaq = np.sum(np.real(ensemble_plaqs(cfg, gauge_bc=gauge_bc))) / V
             print("Average plaq = {:.6g}".format(plaq))
             # topo Q
-            topo = np.sum(compute_topo(cfg))
+            topo = np.sum(compute_topo(cfg, gauge_bc=gauge_bc))
             Q = int(round(topo))
             print("Topo = {:d}".format(Q))
 
@@ -117,6 +118,16 @@ def run_hmc(L, n_step, n_skip, n_therm, tau, n_leap, action, cfg, *, topo_hop_fr
         print("Total hop acc {:.4f}".format(hop_acc / hop_props))
     return cfgs, plaqs, topos, rates, lmoms
 
+def handle_bc_arg(gauge_obc_x, action_type):
+    if (gauge_obc_x):
+        if (action_type == 'two_flavor') or (action_type == 'one_flavor') or (action_type == 'pure_gauge'):
+            gauge_bc = (0, 1)       # open in space, periodic in time
+        else:
+            print("OBC not supported for action type {}".format(action_type))
+            sys.exit(1)
+    else:
+        gauge_bc = (1, 1)       # periodic in space, periodic in time
+    return gauge_bc
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run HMC for Schwinger')
@@ -134,8 +145,13 @@ if __name__ == "__main__":
     parser.add_argument('--topo_hop_freq', type=int, default=0)
     # action params
     parser.add_argument('--type', type=str, required=True)
+    parser.add_argument('--gauge_obc_x', action="store_true")
     parser.add_argument('--beta', type=float)
     parser.add_argument('--kappa', type=float)
+    # atm these are hard coded in schwinger.py
+    # parser.add_argument('--rhmc_poly_deg', type=int)
+    # parser.add_argument('--rhmc_smallest', type=float)
+    # parser.add_argument('--rhmc_largest', type=float)
     parser.add_argument('--reweight_dt', type=int)
     parser.add_argument('--conn_weight', type=float, default=1.0)
     parser.add_argument('--disc_weight', type=float, default=0.0)
@@ -151,7 +167,6 @@ if __name__ == "__main__":
 
     start = time.time()
 
-    # handle params
     if len(args.tag) > 0:
         args.tag = "_" + args.tag
     if args.seed is None:
@@ -175,13 +190,18 @@ if __name__ == "__main__":
         cfg = np.load(args.init_cfg)
         cfg = cfg.reshape(shape)
     tot_steps = args.Ncfg * args.n_skip
+    gauge_bc = handle_bc_arg(args.gauge_obc_x, args.type)
     if args.type == "pure_gauge":
         assert(args.beta is not None)
-        action = PureGaugeAction(args.beta)
+        action = PureGaugeAction(args.beta, gauge_bc = gauge_bc)
     elif args.type == "two_flavor":
         assert(args.beta is not None)
         assert(args.kappa is not None)
-        action = TwoFlavorAction(args.beta, args.kappa)
+        action = TwoFlavorAction(args.beta, args.kappa, gauge_bc = gauge_bc)
+    elif args.type == "one_flavor":
+        assert(args.beta is not None)
+        assert(args.kappa is not None)
+        action = OneFlavorAction(args.beta, args.kappa, gauge_bc = gauge_bc)
     elif args.type == "exact_1flav_staggered":
         assert(args.beta is not None)
         assert(args.kappa is not None)
@@ -203,12 +223,17 @@ if __name__ == "__main__":
     # do the thing!
     cfgs, plaqs, topos, rates, lmoms = run_hmc(L, tot_steps, args.n_skip, args.n_therm,
                                  args.tau, args.n_leap, action, cfg,
-                                 topo_hop_freq=args.topo_hop_freq)
+                                 topo_hop_freq=args.topo_hop_freq,
+                                 gauge_bc=gauge_bc)
 
     # write stuff out
-    prefix = 'u1_{:s}_N{:d}_skip{:d}_therm{:d}_{:d}_{:d}{:s}'.format(
+    path = 'ens/{:s}/{:s}/gaugeBC{:d}{:d}/'.format(args.tag, action.make_tag(), gauge_bc[0], gauge_bc[1])
+    os.makedirs(path, exist_ok=True)
+    prefix = path + 'u1_{:s}_N{:d}_skip{:d}_therm{:d}_{:d}_{:d}_gaugeBC{:d}{:d}{:s}'.format(
         action.make_tag(), args.Ncfg, args.n_skip, args.n_therm,
-        args.Lx, args.Lt, args.tag)
+        args.Lx, args.Lt,
+        gauge_bc[0], gauge_bc[1],
+        args.tag)
     fname = prefix + '.npy'
     np.save(fname, cfgs)
     print("Wrote ensemble to {}".format(fname))
@@ -231,27 +256,51 @@ if __name__ == "__main__":
     else:
         if args.compute_dirac == "wilson":
             assert args.kappa is not None, "kappa required"
-            make_D = lambda cfg: dirac_op(cfg, kappa=args.kappa).toarray()
-            Cts = []
+            make_D = lambda cfg: dirac_op(cfg,
+                                          kappa=args.kappa,
+                                          sign=1,
+                                          fermion_bc=action.fermion_bc).toarray()
+            Cts = []    # accumulator for zero-momentum pion C(t) over all configs
             for cfg in cfgs:
                 D = make_D(cfg)
-                Dinv = np.linalg.inv(D)
+                Dinv = np.linalg.inv(D)             # all to all propagagtor
                 Dinv = np.reshape(Dinv, L + [NS] + L + [NS])
                 Lx, Lt = L
-                C_src_avg = 0
+                C_src_avg = 0   # for averaging over all sources
+                # and, for each, shift the source to the origin
                 for x in range(Lx):
                     for t in range(Lt):
+                        # propagator from fixed (x, t, any spin) to any point,
+                        # shifted back by (x, t)
                         prop = np.roll(Dinv[:,:,:,x,t,:], (-x,-t), axis=(0,1))
-                        prop_dag = np.einsum(
+                        # Find antiprop
+                        #
+                        # prop = G(y|x)_{cb}
+                        # antiprop = G(x|y)_{ad}
+                        #
+                        # G(y|x)_{cb} = g5_{cd} Gdag(x|y)_{da} g5_{ab} =>
+                        # Gdag(x|y)_{da} = g5dag_{dc} G(y|x)_{cb} g5dag_{ba} =>
+                        # antiprop  = G(x|y)_{ad} = [Gdag(x|y)_{da}]^dag = (g5 G(y|x) g5)^dag
+                        #           = g5_{ab} G(y|x)^*_{bc} g5_{cd}
+                        #           = g5 * (prop^*)^{T in spin} * g5
+                        #
+                        # Basis choice:
+                        # g_1 (Euclidean) = -i g_1 (Minkowski) = pauli_x
+                        # g_2 (Euclidean) = g_0 (Minkowski)    = pauli_y
+                        #  => g_5 (Euclidean) = i g_1 g_2 (Euclidean) = - pauli_z
+                        # N.B the factor of i for chiral projector in Euclidean space in 2d
+                        antiprop = np.einsum(
                             'ab,xybc,cd->xyad', pauli(3),
                             np.swapaxes(np.conj(prop), axis1=-1, axis2=-2), pauli(3))
                         meson_corr = lambda p1, p2: np.einsum(
-                            'xyab,bc,xycd,da -> xy', prop, p1, prop_dag, p2)
+                            'xyab,bc,xycd,da -> xy', prop, p1, antiprop, p2)
                         assert np.allclose(
                             meson_corr(pauli(3), pauli(3)),
                             np.sum(np.abs(prop**2), axis=(2,3)))
                         pion_corr = meson_corr(pauli(3), pauli(3))
+                        # TODO momentum-project before source averaging
                         C_src_avg = C_src_avg + pion_corr / (Lx*Lt)
+                # project onto zero momentum by summing over x within each y slice
                 Ct = np.mean(C_src_avg, axis=0)
                 Cts.append(Ct)
         elif args.compute_dirac == "staggered":

@@ -34,6 +34,12 @@
 # bin directory
 bin/*
 
+# ensembles, measurement, analysis, and plots directories
+ens/*
+meas/*
+anls/*
+plots/*
+
 # Emacs backup files
 *~
 

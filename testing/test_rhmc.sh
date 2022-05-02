@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 source env.sh
-source ${TESTDIR}/cfg.sh   # defines beta, kappa, action, etc.
+source ${TESTDIR}/rhmc_new_cfg.sh   # defines beta, kappa, action, etc.
 
-# add --gauge_obc_x \ to enable spatial obc
-# add --seed=${SEED} \ if fixing seed
+# add --gauge_obc_x to enable spatial obc
+# add seed=${SEED} if fixing seed
 ${PYTHON} ${HMCDIR}/schwinger_hmc.py \
     --Lx=${LX} \
     --Lt=${LT} \

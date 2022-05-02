@@ -51,9 +51,14 @@ amean = lambda x: np.abs(np.mean(x, axis=0))
 def log_meff(x):
     corr = rmean(x)
     return np.log(corr[:-1] / corr[1:])
+
 def acosh_meff(x):
     corr = rmean(x)
     return np.arccosh((corr[:-2] + corr[2:])/(2*corr[1:-1]))
+
+def asinh_meff(x):
+    corr = rmean(x)
+    return np.arcsinh((corr[:-2] - corr[2:])/(2*corr[1:-1]))
 
 def make_stn_f(*, N_inner_boot, f):
     def stn(x):
