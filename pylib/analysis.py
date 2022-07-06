@@ -66,17 +66,23 @@ def make_stn_f(*, N_inner_boot, f):
     return stn
 
 # Bootstrapping framework
-def bootstrap_gen(*samples, Nboot):
+def bootstrap_gen(*samples, Nboot, seed=None):
+    rng = np.random.default_rng(seed=seed)
     n = len(samples[0])
     for i in range(Nboot):
-        inds = np.random.randint(n, size=n)
+        inds = rng.integers(n, size=n)
         yield tuple(s[inds] for s in samples)
 
-def bootstrap(*samples, Nboot, f):
+def bootstrap(*samples, Nboot, f, bias_correction=False, seed=None):
     boots = []
-    for x in bootstrap_gen(*samples, Nboot=Nboot):
+    for x in bootstrap_gen(*samples, Nboot=Nboot, seed=seed):
         boots.append(f(*x))
-    return np.mean(boots, axis=0), np.std(boots, axis=0)
+    boot_mean, boot_err = np.mean(boots, axis=0), np.std(boots, axis=0)
+    if not bias_correction:
+        return boot_mean, boot_err
+    full_mean = f(*samples)
+    corrected_mean = 2*full_mean - boot_mean
+    return corrected_mean, boot_err
 
 def covar_from_boots(boots):
     boots = np.array(boots)
@@ -92,10 +98,7 @@ def bin_data(x, *, binsize, silent_trunc=True):
     else:
         assert x.shape[0] % binsize == 0
     ts = np.arange(0, x.shape[0], binsize) # left endpoints of bins
-    if len(x.shape) >= 2:
-        x = np.reshape(x, (-1, binsize) + x.shape[2:])
-    else:
-        x = np.reshape(x, (-1, binsize))
+    x = np.reshape(x, (-1, binsize) + x.shape[1:])
     return ts, np.mean(x, axis=1)
 
 # Autocorrelations
