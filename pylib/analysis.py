@@ -91,6 +91,11 @@ def covar_from_boots(boots):
     deltas = boots - means
     return np.tensordot(deltas, deltas, axes=(0,0)) / (Nboot-1)
 
+def shrink_covar(covar, *, lam):
+    assert len(covar.shape) == 2 and covar.shape[0] == covar.shape[1]
+    diag_covar = np.diag(covar) * np.identity(covar.shape[0])
+    return (1-lam) * covar + lam * diag_covar
+
 def bin_data(x, *, binsize, silent_trunc=True):
     x = np.array(x)
     if silent_trunc:
