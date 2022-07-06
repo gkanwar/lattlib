@@ -1,14 +1,17 @@
 import numpy as np
 
 # Plot error traces
-def add_errorbar(trace, *, ax, xs=None, off=0.0, **kwargs):
+def add_errorbar(trace, *, ax, xs=None, off=0.0, flip=False, **kwargs):
     mean, err = trace
     if xs is None:
         xs = np.arange(len(mean), dtype=np.float64)
     else:
         xs = np.array(xs).astype(np.float64)
     xs += off
-    ax.errorbar(xs, mean, yerr=err, **kwargs)
+    if flip:
+        return ax.errorbar(mean, xs, xerr=err, **kwargs)
+    else:
+        return ax.errorbar(xs, mean, yerr=err, **kwargs)
 def add_errorbar_fill(trace, *, ax, xs=None, off=0.0, **kwargs):
     mean, err = trace
     if xs is None:
