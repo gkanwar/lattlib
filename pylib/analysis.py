@@ -84,6 +84,8 @@ def bootstrap(*samples, Nboot, f, bias_correction=False, seed=None):
     corrected_mean = 2*full_mean - boot_mean
     return corrected_mean, boot_err
 
+# TODO: Replace with np.cov? Only difference is that covar_from_boots allows
+# higher-order shapes, but this is probably not useful.
 def covar_from_boots(boots):
     boots = np.array(boots)
     Nboot = boots.shape[0]
