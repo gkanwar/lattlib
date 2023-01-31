@@ -294,13 +294,13 @@ def topo_charge_density_4d(cfg):
             gauge_adj(open_plaqs_below(cfg, mu, nu)) +
             open_plaqs_above(cfg, nu, mu) +
             open_plaqs_below_behind(cfg, mu, nu)
-            ) / 4
+            ) / 2
         F_rhosig = (
             open_plaqs_above(cfg, rho, sig) +
             gauge_adj(open_plaqs_below(cfg, rho, sig)) +
             open_plaqs_above(cfg, sig, rho) +
             open_plaqs_below_behind(cfg, rho, sig)
-            ) / 4
+            ) / 2
         F_munu = gauge_proj_traceless((F_munu - gauge_adj(F_munu)) / 2)
         F_rhosig = gauge_proj_traceless((F_rhosig - gauge_adj(F_rhosig)) / 2)
         topo = topo - np.trace(F_munu @ F_rhosig, axis1=-1, axis2=-2)
