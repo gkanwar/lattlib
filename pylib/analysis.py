@@ -110,11 +110,12 @@ def bin_data(x, *, binsize, silent_trunc=True):
 
 # Autocorrelations
 def compute_autocorr(Os, *, tmax, vacsub=True):
+    assert np.allclose(np.imag(Os), 0.0)
     if vacsub:
         dOs = Os - np.mean(Os)
     else:
         dOs = Os
-    Gamma = np.array([np.mean(dOs[t:] - dOs[:-t]) for t in range(1,tmax)])
+    Gamma = np.array([np.mean((dOs[t:] - dOs[:-t])**2) for t in range(1,tmax)])
     Gamma = np.insert(Gamma, 0, np.mean(dOs**2))
     rho = Gamma / Gamma[0]
     return rho
