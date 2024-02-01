@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # SEED=1 will use rand seed
-LX=16
-LT=24
+LX=32
+LT=48
 TAG="testing"
 NCFG=100
 NSKIP=10

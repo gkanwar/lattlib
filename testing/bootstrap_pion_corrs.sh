@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
 source env.sh
-source ${TESTDIR}/rhmc_cfg.sh # defines beta, kappa, action, etc.
+source "${TESTDIR}"/entanglement.sh # defines beta, kappa, action, etc.
 
 # add --gauge_obc_x to enable spatial obc
 # add seed=${SEED} if fixing seed
-${PYTHON} ${TESTDIR}/bootstrap_pion_corrs.py \
+${PYTHON} "${TESTDIR}"/bootstrap_pion_corrs.py \
     --Lx=${LX} \
     --Lt=${LT} \
     --tag=${TAG} \

@@ -10,7 +10,7 @@ import sys
 import tqdm
 import time
 from schwinger_hmc import handle_bc_arg
-from schwinger.schwinger import *
+from schwinger import *
 
 def get_coord_index(x, L):
     assert(len(L) == 2)
@@ -51,9 +51,7 @@ if __name__ == "__main__":
     parser.add_argument('--xspace', type=int, default=1)
     args = parser.parse_args()
     print("args = {}".format(args))
-
     start = time.time()
-
     if len(args.tag) > 0:
         args.tag = "_" + args.tag
     L = [args.Lx, args.Lt]
@@ -102,64 +100,109 @@ if __name__ == "__main__":
     fname = prefix_ens + '.npy'
     # get config files
     cfgs = np.load(fname)
-
-    # TODO: reorganize into h5py files
-    constructions = ['g5-g5', 'g2g5-g2g5', 'g5-g2g5', 'g2g5-g5']
+    Lx, Lt = L
+    # define gamma functions
+    # Basis choice:
+    # g_1 (Euclidean) = -i g_1 (Minkowski) = pauli_x
+    # g_2 (Euclidean) = g_0 (Minkowski)    = pauli_y
+    #  => g_5 (Euclidean) = i g_1 g_2 (Euclidean) = - pauli_z
+    # N.B the factor of i for chiral projector in Euclidean space in 2d
+    g = {}
+    g['0'] = pauli(0)
+    g['5'] = -pauli(3)
+    g['2']= pauli(2)
+    g['25'] = np.matmul(g['2'], g['5'])
+    # do the thing
+    gsrcs = ['5', '2', '25']
+    gsnks = ['5', '2', '25']
+    csrcs = ['l', 'n', 'n2'] # l = local, n = non-local 1 link, n2 = non-local 2 link
+    csnks = ['l', 'n', 'n2']
+    constructions = []
+    for gsrc in gsrcs:
+        for gsnk in gsnks:
+            for csrc in csrcs:
+                for csnk in csnks:
+                    constructions.append('g' + gsrc + '-' + 'g' + gsnk + '_' + csrc + csnk)
+    print(constructions)
     if compute_dirac == "wilson":
         assert args.kappa is not None, "kappa required"
-        #make_D = lambda cfg: dirac_op(cfg,
-        #                              kappa=args.kappa,
-        #                              sign=1,
-        #                              fermion_bc=action.fermion_bc).toarray()
-        Cts = {}                                # accumulator over cfgs for zero-momentum, source-averaged pion C(t)
+        make_D = lambda cfg: dirac_op(cfg,
+                                      kappa=args.kappa,
+                                      sign=1,
+                                      fermion_bc=action.fermion_bc).toarray()
+        Cts_conn = {}                                # accumulator over cfgs for zero-momentum, source-averaged pion C(t)
+        Cts_disc = {}                                # accumulator over cfgs for zero-momentum, source-averaged pion C(t)
         for construction in constructions:
-            Cts[construction] = []              # shape = (Lt, )
+            Cts_conn[construction] = []              # shape = (Lt, )
+            Cts_disc[construction] = []              # shape = (Lt, )
+        print("Computing vacuum contributions...")
+        vac = np.zeros((Lx, Lt, Ns, Ns), dtype=complex)
         for icfg in range(len(cfgs)):
             print("Working on config %d/%d" % (icfg + 1, len(cfgs)))
             cfg = cfgs[icfg]
-            M = dirac_op(cfg, kappa=args.kappa, sign=1, fermion_bc=action.fermion_bc)
-            if args.type == 'one_flavor':
-                Mdag = dirac_op(cfg, kappa=args.kappa, sign=-1, fermion_bc=action.fermion_bc)
-                K = Mdag @ M
-                a0 = action.a0
-                r = action.r
-                musq = action.musq
-            Lx, Lt = L
-            C_src_avg_acc = {}                 # accumulator over sources for pion C(x, t) (source averaging before momentum projection)
+            D = make_D(cfg)
+            Dinv = np.linalg.inv(D)                         # all to all propagagtor
+            Dinv = np.reshape(Dinv, L + [NS] + L + [NS])
+            vac += np.einsum('xyaxyb -> xyab', Dinv)        # TODO: contract separately for different gammas; shift by x0, t0 later?
+        vac = vac / len(cfgs)
+        assert(vac.shape == (Lx, Lt, Ns, Ns))
+        print("Computing connected & disconnected contributions, subtracting vacuum contributions...")
+        for icfg in range(len(cfgs)):
+            print("Working on config %d/%d" % (icfg + 1, len(cfgs)))
+            cfg = cfgs[icfg]
+            D = make_D(cfg)
+            Dinv = np.linalg.inv(D)                 # all to all propagagtor
+            Dinv = np.reshape(Dinv, L + [NS] + L + [NS])
+            #M = dirac_op(cfg, kappa=args.kappa, sign=1, fermion_bc=action.fermion_bc)
+            C_conn_src_avg_acc = {}                 # accumulator over sources for pion C(x, t) (source averaging before momentum projection)
+            C_disc_src_avg_acc = {}                 # accumulator over sources for pion C(x, t) (source averaging before momentum projection)
             for construction in constructions:
-                C_src_avg_acc[construction] = 0
-            # loop over sources in the bulk
-            boundary_layer = int(Lt/4)
-            # TODO add disconnecteds
-            for x0 in range (int(Lx/2), int(Lx/2) + 1):
-                print(x0)
-            #for x0 in range(boundary_layer, Lx-boundary_layer):
+                C_conn_src_avg_acc[construction] = 0
+                C_disc_src_avg_acc[construction] = 0
+            # loop over sources, optionally only in the "bulk" for spatial OBC
+            boundary_layer = int(Lx/4)
+            nsources = 0
+            #for x0 in range(int(Lx/2), int(Lx/2) + 1):
+            prop = {}
+            opp_prop = {}
+            antiprop = {}
+            meson_corr_conn = {}
+            meson_corr_disc = {}
+            for x0 in range(boundary_layer, Lx-boundary_layer):
                 for t0 in range(Lt):
-                    print("source at time ", t0)
-                    src = make_prop_src([(x0, t0)], L)
-                    if args.type == 'two_flavor':
-                        prop = sp.sparse.linalg.spsolve(M, src)
-                        resid = sp.linalg.norm(M @ prop - src)
-                        print("Resid = {}".format(resid))
-                    elif args.type == 'one_flavor':
-                        prop = np.copy(src)
-                        for s in range(Ns):
-                            print("spin component ", s)
-                            psi, info = stupid_multishift_cg(K, musq, src[:, s])
-                            for k in range(len(musq)):
-                                if info[k] > 0:
-                                    print(f'WARNING RHMC (term {k}): CG failed to converge after {info[k]} iters')
-                                    resid = np.linalg.norm(K @ psi[k] + musq[k] * psi[k]  - src[:, s])
-                                    print('... residual (abs):', resid)
-                                    print('... residual (rel):', resid / np.linalg.norm(src[:, s]))
-                                elif info[k] < 0:
-                                    print(f'WARNING RHMC (term {k}): CG illegal input or breakdown ({info[k]})')
-                                prop[:, s] += r[k] * psi[k]
-                            prop[:, s] *= a0
-                    else:
-                        raise
-                    prop = prop.reshape(L + [Ns, Ns])
-                    prop = np.roll(prop, (-x0,-t0), axis=(0,1))
+                    nsources += 1
+                    # src = make_prop_src([(x0, t0)], L)
+                    # propagator from fixed (x, t, any spin) to any point,
+                    # shifted back by (x, t) & multiplied by links at source and sink
+                    # n = non-local with link from x to x+a
+                    # n2 = non-local with link from x-a to x+a
+                    # l = local
+                    # prop_src_snk
+                    opp_prop['ll']   = np.roll(Dinv[:,:,:,x0, t0,:], (-x0,-t0), axis=(0,1))             # src at 0, snk at x-x0
+                    opp_prop['nl']   = np.roll(Dinv[:,:,:,(x0+1) % Lx, t0,:], (-x0,-t0), axis=(0,1))    # src at 0+a, snk at x-x0
+                    opp_prop['n2l']  = opp_prop['nl']
+                    opp_prop['ln']   = np.roll(opp_prop['ll'],  (-1), axis=0)                           # src at 0, snk at x-x0+a
+                    opp_prop['ln2']  = opp_prop['ln']
+                    opp_prop['nn']   = np.roll(opp_prop['nl'],  (-1), axis=0)                           # snk at x-x0+a, src at 0+a
+                    opp_prop['n2n']  = opp_prop['nn']
+                    opp_prop['nn2']  = opp_prop['nn']
+                    opp_prop['n2n2'] = opp_prop['nn']
+                    u = np.roll(np.conj(cfg[0]), (-x0, -t0), axis=(0, 1))
+                    prop['ll']   = np.roll(Dinv[:,:,:,x0, t0,:], (-x0,-t0), axis=(0,1))                 # src at 0, snk at x-x0
+                    prop['nl']   = cfg[0, x0, t0] * prop['ll']                                          # U0(0) * (src at 0), snk at x-x0
+                    # U0(0) * U0(0-a) * (src at 0-a), snk at x-x0
+                    prop['n2l']  = cfg[0, x0, t0] * cfg[0, (x0-1) % Lx, t0] * np.roll(Dinv[:,:,:,(x0-1) % Lx, t0,:], (-x0,-t0), axis=(0,1))
+                    prop['ln']   = np.einsum('xy,xyab->xyab', u, prop['ll'])                            # src at 0, U0(x-x0)^dag * (snk at x-x0)
+                    prop['ln2']  = np.einsum('xy,xyab->xyab', u, np.roll(prop['ln'], (+1), axis=0))     # src at 0, U0(x-x0)^dag * [U0(x-x0-a)^dag * (snk at x-x0-a)]
+                    prop['nn']   = np.einsum('xy,xyab->xyab', u, prop['nl'])                            # U0(0) * (src at 0), U0(x-x0)^dag * (snk at x-x0)
+                    prop['n2n']  = np.einsum('xy,xyab->xyab', u, prop['n2l'])                           # U0(0) * U0(0-a) * (src at 0-a), U0(x-x0) * (snk at x-x0)
+                    prop['nn2']  = cfg[0, x0, t0] * prop['ln2']                                         # U0(0) * (src at 0), U0(x-x0)^dag * [U0(x-x0-a)^dag * (snk at x-x0-a)]
+                    prop['n2n2'] = np.einsum('xy,xyab->xyab', u, np.roll(prop['n2n'], (+1), axis=0))    # U0(0) * U0(0-a) * (src at 0-a), U0(x-x0)^dag * [U0(x-x0-a)^dag * (snk at x-x0-a)]
+                    # prop = sp.sparse.linalg.spsolve(M, src)
+                    # resid = sp.linalg.norm(M @ prop - src)
+                    # print("Resid = {}".format(resid))
+                    # prop = prop.reshape(L + [Ns, Ns])
+                    # prop = np.roll(prop, (-x0,-t0), axis=(0,1))
                     # Find antiprop
                     #
                     # prop = G(y|x)_{cb}
@@ -170,41 +213,68 @@ if __name__ == "__main__":
                     # antiprop  = G(x|y)_{ad} = [Gdag(x|y)_{da}]^dag = (g5 G(y|x) g5)^dag
                     #           = g5_{ab} G(y|x)^*_{bc} g5_{cd}
                     #           = g5 * (prop^*)^{T in spin} * g5
-                    #
-                    # Basis choice:
-                    # g_1 (Euclidean) = -i g_1 (Minkowski) = pauli_x
-                    # g_2 (Euclidean) = g_0 (Minkowski)    = pauli_y
-                    #  => g_5 (Euclidean) = i g_1 g_2 (Euclidean) = - pauli_z
-                    # N.B the factor of i for chiral projector in Euclidean space in 2d
-                    g5 = -pauli(3)
-                    g2 = pauli(2)
-                    g2g5 = np.matmul(g2, g5)
-                    antiprop = np.einsum(
-                        'ab,xybc,cd->xyad',
-                        g5,
-                        np.swapaxes(np.conj(prop), axis1=-1, axis2=-2),
-                        g5)
-                    # for source O propto gi, sink Obar propto pm gj
-                    # C = mp tr(prop * gi * antiprop * gj)
-                    meson_corr_conn = lambda p1, p2: -np.einsum(            # n.b. sign
-                        'xyab,bc,xycd,da -> xy', prop, p1, antiprop, p2)
-                    meson_corr = lambda p1, p2: args.conn_weight * meson_corr_conn(p1, p2) #+ args.disc_weight * meson_corr_disc(p0, p2)
+                    for csrc in csrcs:
+                        for csnk in csnks:
+                            antiprop[csrc + csnk] = np.einsum(
+                                'ab,xybc,cd->xyad',
+                                g['5'],
+                                np.swapaxes(np.conj(opp_prop[csrc + csnk]), axis1=-1, axis2=-2),
+                                g['5'])
+                            # disk is wrong?
+                            disc = np.einsum('xyaxyb->xyab', Dinv)
+                            disc_sub = disc - vac                   # subract <Tr{g2 D} Tr{g1 D}> - <Tr[{g2 D}]> <Tr[{g1 D}]>
+                            disc_sub_src = disc_sub[x0, t0, :, :]   # subtract vacuum contribution after multiplying in gammas, shifting sources?!
+                            disc_sub_snk = np.roll(disc_sub, (-x0, -t0), axis=(0, 1))
+                            # for source O propto gi, sink Obar propto pm gj
+                            # C = mp tr(prop * gi * antiprop * gj)
+                            meson_corr_disc[csrc + csnk] = lambda p1, p2: np.einsum(             # disconnected, vacuum subtracted
+                                'ab,ba,xycd,dc -> xy', disc_sub_src, p1, disc_sub_snk, p2)
+                            meson_corr_conn[csrc + csnk] = lambda p1, p2: -np.einsum(            # n.b. sign
+                                'xyab,bc,xycd,da -> xy', prop[csrc+csnk], p1, antiprop[csrc+csnk], p2)
+                            # use args.conn_weight, args_disk_weight
+                            # meson_corr = lambda p1, p2: meson_corr_conn(p1, p2) + meson_corr_disc(p1, p2)
                     # check that for g5 g5, connected correlator equal to
                     # elementwise product prop * prop^*
-                    assert np.allclose(
-                        meson_corr_conn(g5, g5),
-                        -np.sum(np.abs(prop**2), axis=(2,3))
-                    )
+                    # assert np.allclose(
+                    #     meson_corr_conn(g5, g5),
+                    #     -np.sum(np.abs(prop**2), axis=(2,3))
+                    # )
                     # project into zero momentum
-                    # increment source accumulators by C(x, t) from this (x0, t0) source, project onto zero-momentum
-                    C_src_avg_acc['g5-g5']      = C_src_avg_acc['g5-g5']     + np.mean(  meson_corr(g5,   g2 @ np.conj( g5.T   ) @ g2), axis=0 )
-                    C_src_avg_acc['g2g5-g2g5']  = C_src_avg_acc['g2g5-g2g5'] + np.mean(  meson_corr(g2g5, g2 @ np.conj( g2g5.T ) @ g2), axis=0 )
-                    C_src_avg_acc['g5-g2g5']    = C_src_avg_acc['g5-g2g5']   + np.mean(  meson_corr(g5,   g2 @ np.conj( g2g5.T ) @ g2), axis=0 )
-                    C_src_avg_acc['g2g5-g5']    = C_src_avg_acc['g2g5-g5']   + np.mean(  meson_corr(g2g5, g2 @ np.conj( g5.T   ) @ g2), axis=0 )
-                    # project onto zero momentum by summing over x within each t slice
-                    for construction in constructions:
-                        Ct = C_src_avg_acc[construction]
-                        Cts[construction].append(Ct)
+                    # increment source accumulators by C(x, t) from this (x0, t0) source
+                    # vector
+                    l = -x0 + boundary_layer
+                    r = -x0 + (Lx-boundary_layer)
+                    for gsrc in gsrcs:
+                        for gsnk in gsnks:
+                            for csrc in csrcs:
+                                for csnk in csnks:
+                                    constr = 'g' + gsrc + '-' + 'g' + gsnk + '_' + csrc + csnk
+                                    C_conn_src_avg_acc[constr]   = C_conn_src_avg_acc[constr] + np.sum(meson_corr_conn[csrc+csnk](g[gsrc],   g['2'] @ np.conj( g[gsnk].T   ) @ g['2'])[range(l,r), :], axis=0)
+                                    # C_conn_src_avg_acc['g2g5-g2g5']  = C_conn_src_avg_acc['g2g5-g2g5'] + np.sum(meson_corr_conn(g2g5, g2 @ np.conj( g2g5.T ) @ g2)[range(l,r), :], axis=0)
+                                    # C_conn_src_avg_acc['g5-g2g5']    = C_conn_src_avg_acc['g5-g2g5']   + np.sum(meson_corr_conn(g5,   g2 @ np.conj( g2g5.T ) @ g2)[range(l,r), :], axis=0)
+                                    # C_conn_src_avg_acc['g2g5-g5']    = C_conn_src_avg_acc['g2g5-g5']   + np.sum(meson_corr_conn(g2g5, g2 @ np.conj( g5.T   ) @ g2)[range(l,r), :], axis=0)
+                                    # # # scalar
+                                    # # C_conn_src_avg_acc['g0-g0']      = C_conn_src_avg_acc['g0-g0']     + np.sum(meson_corr_conn(g0, g2 @ np.conj(  g0.T ) @ g2)[range(l,r), :], axis=0)
+                                    # # C_conn_src_avg_acc['g2-g2']      = C_conn_src_avg_acc['g2-g2']     + np.sum(meson_corr_conn(g2, g2 @ np.conj(  g2.T ) @ g2)[range(l,r), :], axis=0)
+                                    # # C_conn_src_avg_acc['g0-g2']      = C_conn_src_avg_acc['g0-g2']     + np.sum(meson_corr_conn(g0, g2 @ np.conj(  g2.T ) @ g2)[range(l,r), :], axis=0)
+                                    # # C_conn_src_avg_acc['g2-g0']      = C_conn_src_avg_acc['g2-g0']     + np.sum(meson_corr_conn(g2, g2 @ np.conj(  g0.T ) @ g2)[range(l,r), :], axis=0)
+                                    C_disc_src_avg_acc[constr]   = C_disc_src_avg_acc[constr] + np.sum(meson_corr_conn[csrc+csnk](g[gsrc],   g['2'] @ np.conj( g[gsnk].T   ) @ g['2'])[range(l,r), :], axis=0)
+                                    # # vector
+                                    # C_disc_src_avg_acc['g5-g5']      = C_disc_src_avg_acc['g5-g5']     + np.sum(meson_corr_disc(g5,   g2 @ np.conj( g5.T   ) @ g2)[range(l,r), :], axis=0)
+                                    # C_disc_src_avg_acc['g2g5-g2g5']  = C_disc_src_avg_acc['g2g5-g2g5'] + np.sum(meson_corr_disc(g2g5, g2 @ np.conj( g2g5.T ) @ g2)[range(l,r), :], axis=0)
+                                    # C_disc_src_avg_acc['g5-g2g5']    = C_disc_src_avg_acc['g5-g2g5']   + np.sum(meson_corr_disc(g5,   g2 @ np.conj( g2g5.T ) @ g2)[range(l,r), :], axis=0)
+                                    # C_disc_src_avg_acc['g2g5-g5']    = C_disc_src_avg_acc['g2g5-g5']   + np.sum(meson_corr_disc(g2g5, g2 @ np.conj( g5.T   ) @ g2)[range(l,r), :], axis=0)
+                                    # # scalar
+                                    # C_disc_src_avg_acc['g0-g0']      = C_disc_src_avg_acc['g0-g0']     + np.sum(meson_corr_disc(g0, g2 @ np.conj(  g0.T ) @ g2)[range(l,r), :], axis=0)
+                                    # C_disc_src_avg_acc['g2-g2']      = C_disc_src_avg_acc['g2-g2']     + np.sum(meson_corr_disc(g2, g2 @ np.conj(  g2.T ) @ g2)[range(l,r), :], axis=0)
+                                    # C_disc_src_avg_acc['g0-g2']      = C_disc_src_avg_acc['g0-g2']     + np.sum(meson_corr_disc(g0, g2 @ np.conj(  g2.T ) @ g2)[range(l,r), :], axis=0)
+                                    # C_disc_src_avg_acc['g2-g0']      = C_disc_src_avg_acc['g2-g0']     + np.sum(meson_corr_disc(g2, g2 @ np.conj(  g0.T ) @ g2)[range(l,r), :], axis=0)
+                # save source-averaged momentum-projected stuff
+            for construction in constructions:
+                Ct_conn = C_conn_src_avg_acc[construction] / nsources
+                Ct_disc = C_disc_src_avg_acc[construction] / nsources
+                Cts_conn[construction].append(Ct_conn)
+                Cts_disc[construction].append(Ct_disc)
     elif compute_dirac == "staggered":
         assert args.kappa is not None, "kappa required"
         m0 = m0_from_kappa(args.kappa, Nd)
@@ -212,7 +282,13 @@ if __name__ == "__main__":
         raise NotImplementedError('staggered not implemented')
     else:
         raise RuntimeError(f"Dirac op type {args.compute_dirac} not supported")
-    for construction in ['g5-g5', 'g2g5-g2g5', 'g5-g2g5', 'g2g5-g5']:
-        fname = prefix_meas + '_meson_Ct_' + construction + '.npy'
-        np.save(fname, np.array(Cts[construction]))
-        print("Wrote Cts to {}".format(fname))
+    fname_vac = prefix_meas + '_vac.npy'
+    np.save(fname_vac, np.array(vac))
+    print("Wrote vac to {}".format(fname_vac))
+    for construction in constructions:
+        fname = prefix_meas + '_meson_Ct_conn_' + construction + '.npy'
+        np.save(fname, np.array(Cts_conn[construction]))
+        print("Wrote connected Cts to {}".format(fname))
+        fname = prefix_meas + '_meson_Ct_disc_' + construction + '.npy'
+        np.save(fname, np.array(Cts_disc[construction]))
+        print("Wrote vacuum-subtracted disconnected Cts to {}".format(fname))

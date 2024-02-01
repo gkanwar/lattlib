@@ -1,10 +1,16 @@
-TOPDIR=`pwd`
-HMCDIR=${TOPDIR}/pybin
-TESTDIR=${TOPDIR}/testing
+TOPDIR="`pwd`"
+HMCDIR="${TOPDIR}"/pybin
+TESTDIR="${TOPDIR}"/testing
+PRODDIR="${TOPDIR}"/prod
 
-if [ ! -d ${TESTDIR} ];
+if [ ! -d "${TESTDIR}" ];
 then
-    mkdir -p ${TESTDIR}
+    mkdir -p "${TESTDIR}"
+fi
+
+if [ ! -d "${PRODDIR}" ];
+then
+    mkdir -p "${PRODDIR}"
 fi
 
 PYTHON=python

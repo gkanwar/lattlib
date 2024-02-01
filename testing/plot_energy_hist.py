@@ -7,10 +7,8 @@ from schwinger.schwinger import PureGaugeAction
 
 # NEEDs ens, beta, action function, nbins
 
-
-action_tag = "u1_of_b2.00_k0.233_N100_skip10_therm40_16_48_gaugeBC01_testing"
-
-ens = np.load(f'./ens/_testing/of_b2.00_k0.233/gaugeBC01/{action_tag}.npy')
+action_tag = "u1_of_b2.50_k0.234_N100_skip10_therm40_16_24_gaugeBC01_match"
+ens = np.load(f'./ens/_match/of_b2.50_k0.234/gaugeBC01/{action_tag}.npy')
 
 beta = 2.0
 nbins = 10

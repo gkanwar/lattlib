@@ -57,7 +57,7 @@ def acosh_meff(x):
     return np.arccosh((corr[:-2] + corr[2:])/(2*corr[1:-1]))
 
 def asinh_meff(x):
-    corr = rmean(x)
+    corr = mean(x)
     return np.arcsinh((corr[:-2] - corr[2:])/(2*corr[1:-1]))
 
 def make_stn_f(*, N_inner_boot, f):
@@ -78,7 +78,7 @@ def bootstrap(*samples, Nboot, f):
     boots = []
     for x in bootstrap_gen(*samples, Nboot=Nboot):
         boots.append(f(*x))
-    return np.mean(boots, axis=0), np.std(boots, axis=0)
+    return boots #np.mean(boots, axis=0), np.std(boots, axis=0)
 
 def covar_from_boots(boots):
     boots = np.array(boots)
